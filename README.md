@@ -1,10 +1,10 @@
-# SwarmAid Backend
+# Replate.ai Backend
 
 Production-ready disaster relief coordination platform backend built on AWS with TypeScript, Lambda, and Gemini AI support.
 
 ## Overview
 
-SwarmAid connects suppliers with surplus resources to recipients in need through a smart matching system and driver coordination. Built for disaster relief scenarios, it includes:
+RePlate.ai connects suppliers with surplus resources to recipients in need through a smart matching system and driver coordination. Built for disaster relief scenarios, it includes:
 
 - **AI-Powered Matching**: Google Gemini enrichment + weighted scoring algorithm
 - **Compliance Engine**: Deterministic rules for safety and logistics
