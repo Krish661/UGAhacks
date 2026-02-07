@@ -1,0 +1,25 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy root package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Copy workspace packages
+COPY services/package*.json ./services/
+COPY infra/package*.json ./infra/
+
+# Install dependencies
+RUN npm install
+
+# Copy source code
+COPY services/ ./services/
+COPY infra/ ./infra/
+
+# Build
+RUN npm run build
+
+EXPOSE 3000
+
+CMD ["npm", "run", "start:local"]

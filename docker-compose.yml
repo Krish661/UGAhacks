@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: swarmaid-dynamodb
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+    volumes:
+      - dynamodb-data:/home/dynamodblocal/data
+    networks:
+      - swarmaid-network
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: swarmaid-localstack
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - SERVICES=s3,sns,secretsmanager,events,stepfunctions
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - LAMBDA_EXECUTOR=local
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - localstack-data:/tmp/localstack
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - swarmaid-network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    container_name: swarmaid-api
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=local
+      - AWS_ENDPOINT=http://localstack:4566
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-stubbed}
+      - LOG_LEVEL=debug
+    volumes:
+      - ./services:/app/services
+      - /app/services/node_modules
+    depends_on:
+      - dynamodb-local
+      - localstack
+    networks:
+      - swarmaid-network
+    command: npm run dev
+
+networks:
+  swarmaid-network:
+    driver: bridge
+
+volumes:
+  dynamodb-data:
+  localstack-data:

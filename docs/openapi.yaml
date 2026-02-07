@@ -1,0 +1,891 @@
+openapi: 3.0.3
+info:
+  title: SwarmAid API
+  description: Disaster relief coordination platform connecting surplus resources with needs
+  version: 1.0.0
+  contact:
+    name: SwarmAid Team
+    email: api@swarmaid.org
+
+servers:
+  - url: https://api.swarmaid.org
+    description: Production
+  - url: http://localhost:3000
+    description: Local development
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        statusCode:
+          type: integer
+
+    Coordinates:
+      type: object
+      properties:
+        lat:
+          type: number
+        lon:
+          type: number
+      required: [lat, lon]
+
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+      required: [street, city, state, postalCode, country]
+
+    TimeWindow:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date-time
+        end:
+          type: string
+          format: date-time
+      required: [start, end]
+
+    SurplusListing:
+      type: object
+      properties:
+        id:
+          type: string
+        supplierId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [perishable_food, non_perishable_food, medical_supplies, hygiene_products, clothing, shelter_materials, equipment, other]
+        quantity:
+          type: number
+        quantityUnit:
+          type: string
+        estimatedValue:
+          type: number
+        images:
+          type: array
+          items:
+            type: string
+        pickupAddress:
+          $ref: '#/components/schemas/Address'
+        pickupCoordinates:
+          $ref: '#/components/schemas/Coordinates'
+        pickupWindow:
+          $ref: '#/components/schemas/TimeWindow'
+        expirationDate:
+          type: string
+          format: date-time
+        requiresRefrigeration:
+          type: boolean
+        handlingRequirements:
+          type: array
+          items:
+            type: string
+        qualityNotes:
+          type: string
+        status:
+          type: string
+          enum: [posted, matched, scheduled, picked_up, delivered, canceled, expired, failed]
+        enrichment:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DemandPost:
+      type: object
+      properties:
+        id:
+          type: string
+        recipientId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        categories:
+          type: array
+          items:
+            type: string
+        quantityNeeded:
+          type: number
+        quantityUnit:
+          type: string
+        capacity:
+          type: number
+        deliveryAddress:
+          $ref: '#/components/schemas/Address'
+        deliveryCoordinates:
+          $ref: '#/components/schemas/Coordinates'
+        acceptanceWindow:
+          $ref: '#/components/schemas/TimeWindow'
+        specialRequirements:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [posted, matched, scheduled, picked_up, delivered, closed, expired]
+
+    MatchRecommendation:
+      type: object
+      properties:
+        id:
+          type: string
+        listingId:
+          type: string
+        demandId:
+          type: string
+        supplierId:
+          type: string
+        recipientId:
+          type: string
+        score:
+          type: number
+        scoreBreakdown:
+          type: object
+        distanceMiles:
+          type: number
+        estimatedDurationMinutes:
+          type: number
+        status:
+          type: string
+          enum: [pending, accepted, rejected, scheduled, in_progress, completed, failed]
+        routePlan:
+          type: object
+        complianceStatus:
+          type: string
+          enum: [pending, passed, blocked, override]
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        cognitoUserId:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [supplier, recipient, driver, compliance, operator, admin]
+        organizationName:
+          type: string
+        phoneNumber:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        notificationPreferences:
+          type: object
+
+paths:
+  # Supply Listing Endpoints
+  /supply:
+    post:
+      summary: Create surplus listing
+      tags: [Supply]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                category:
+                  type: string
+                quantity:
+                  type: number
+                quantityUnit:
+                  type: string
+                estimatedValue:
+                  type: number
+                pickupAddress:
+                  $ref: '#/components/schemas/Address'
+                pickupWindow:
+                  $ref: '#/components/schemas/TimeWindow'
+                expirationDate:
+                  type: string
+                  format: date-time
+                requiresRefrigeration:
+                  type: boolean
+                handlingRequirements:
+                  type: array
+                  items:
+                    type: string
+                qualityNotes:
+                  type: string
+      responses:
+        '201':
+          description: Listing created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurplusListing'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      summary: List surplus listings
+      tags: [Supply]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of listings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  listings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SurplusListing'
+                  nextToken:
+                    type: string
+
+  /supply/{id}:
+    get:
+      summary: Get listing by ID
+      tags: [Supply]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Listing details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurplusListing'
+        '404':
+          description: Listing not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Update listing
+      tags: [Supply]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                quantity:
+                  type: number
+                pickupWindow:
+                  $ref: '#/components/schemas/TimeWindow'
+      responses:
+        '200':
+          description: Listing updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurplusListing'
+
+  /supply/{id}/cancel:
+    post:
+      summary: Cancel listing
+      tags: [Supply]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Listing canceled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurplusListing'
+
+  # Demand Post Endpoints
+  /demand:
+    post:
+      summary: Create demand post
+      tags: [Demand]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                categories:
+                  type: array
+                  items:
+                    type: string
+                quantityNeeded:
+                  type: number
+                quantityUnit:
+                  type: string
+                capacity:
+                  type: number
+                deliveryAddress:
+                  $ref: '#/components/schemas/Address'
+                acceptanceWindow:
+                  $ref: '#/components/schemas/TimeWindow'
+                specialRequirements:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Demand post created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandPost'
+
+    get:
+      summary: List demand posts
+      tags: [Demand]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of demand posts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  demands:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DemandPost'
+
+  /demand/{id}:
+    get:
+      summary: Get demand post by ID
+      tags: [Demand]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Demand post details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DemandPost'
+
+  # Match Recommendation Endpoints
+  /matches/recommendations:
+    post:
+      summary: Create match recommendations
+      tags: [Matches]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                listingId:
+                  type: string
+                demandId:
+                  type: string
+      responses:
+        '201':
+          description: Recommendations created
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchRecommendation'
+
+  /matches:
+    get:
+      summary: List match recommendations
+      tags: [Matches]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchRecommendation'
+
+  /matches/{id}:
+    get:
+      summary: Get match by ID
+      tags: [Matches]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Match details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchRecommendation'
+
+  /matches/{id}/accept:
+    post:
+      summary: Accept match recommendation
+      tags: [Matches]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Match accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchRecommendation'
+
+  /matches/{id}/reject:
+    post:
+      summary: Reject match recommendation
+      tags: [Matches]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Match rejected
+
+  /matches/{id}/schedule:
+    post:
+      summary: Schedule delivery
+      tags: [Matches]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                driverId:
+                  type: string
+                scheduledPickupTime:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: Delivery scheduled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchRecommendation'
+
+  # Compliance Endpoints
+  /compliance/queue:
+    get:
+      summary: Get compliance review queue
+      tags: [Compliance]
+      responses:
+        '200':
+          description: Compliance queue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MatchRecommendation'
+
+  /compliance/{matchId}/approve:
+    post:
+      summary: Approve match with compliance override
+      tags: [Compliance]
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                justification:
+                  type: string
+      responses:
+        '200':
+          description: Match approved
+
+  /compliance/{matchId}/block:
+    post:
+      summary: Block match for compliance issues
+      tags: [Compliance]
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Match blocked
+
+  # Driver Endpoints
+  /driver/tasks:
+    get:
+      summary: Get assigned driver tasks
+      tags: [Driver]
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /driver/tasks/{taskId}/status:
+    post:
+      summary: Update task status
+      tags: [Driver]
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [in_progress, completed, failed]
+      responses:
+        '200':
+          description: Status updated
+
+  /driver/tasks/{taskId}/location:
+    post:
+      summary: Update driver location
+      tags: [Driver]
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                location:
+                  $ref: '#/components/schemas/Coordinates'
+                heading:
+                  type: number
+                speed:
+                  type: number
+      responses:
+        '200':
+          description: Location updated
+
+  # Operator Endpoints
+  /ops/dashboard:
+    get:
+      summary: Get operator dashboard metrics
+      tags: [Operations]
+      responses:
+        '200':
+          description: Dashboard metrics
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /ops/stuck:
+    get:
+      summary: Get stuck/stalled deliveries
+      tags: [Operations]
+      responses:
+        '200':
+          description: List of stuck tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /ops/tasks/{taskId}/override:
+    post:
+      summary: Manual status override
+      tags: [Operations]
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newStatus:
+                  type: string
+                justification:
+                  type: string
+      responses:
+        '200':
+          description: Override applied
+
+  # User Profile Endpoints
+  /me:
+    get:
+      summary: Get current user profile
+      tags: [User]
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+    put:
+      summary: Update user profile
+      tags: [User]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                phoneNumber:
+                  type: string
+                address:
+                  $ref: '#/components/schemas/Address'
+      responses:
+        '200':
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  /me/notifications:
+    put:
+      summary: Update notification preferences
+      tags: [User]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: boolean
+                sms:
+                  type: boolean
+                inApp:
+                  type: boolean
+      responses:
+        '200':
+          description: Preferences updated
+
+  # Events Endpoint
+  /events:
+    get:
+      summary: Poll for events (long polling)
+      tags: [Events]
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: timeout
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+tags:
+  - name: Supply
+    description: Surplus listing operations
+  - name: Demand
+    description: Demand post operations
+  - name: Matches
+    description: Match recommendation operations
+  - name: Compliance
+    description: Compliance review operations
+  - name: Driver
+    description: Driver task operations
+  - name: Operations
+    description: Operator dashboard and overrides
+  - name: User
+    description: User profile operations
+  - name: Events
+    description: Real-time event streaming
